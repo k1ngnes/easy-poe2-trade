@@ -1,66 +1,60 @@
-import { app, BrowserWindow } from 'electron'
-import { fileURLToPath } from 'node:url'
-import path from 'node:path'
+'use strict'
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
+import { app } from 'electron'
+import { uIOhook } from 'uiohook-napi'
+import os from 'node:os'
+import { startServer, eventPipe, server } from 'electron/server'
+import { Logger } from './RemoteLogger'
+// import { GameWindow } from './windowing/GameWindow'
+// import { OverlayWindow } from './windowing/OverlayWindow'
+// import { GameConfig } from './host-files/GameConfig'
+// import { Shortcuts } from './shortcuts/Shortcuts'
+// import { AppUpdater } from './AppUpdater'
+// import { AppTray } from './AppTray'
+// import { OverlayVisibility } from './windowing/OverlayVisibility'
+import { GameLogWatcher } from 'host-files/GameLogWatcher'
 
-// The built directory structure
-//
-// ├─┬─┬ dist
-// │ │ └── index.html
-// │ │
-// │ ├─┬ dist-electron
-// │ │ ├── main.js
-// │ │ └── preload.mjs
-// │
-process.env.APP_ROOT = path.join(__dirname, '..')
 
-// 🚧 Use ['ENV_NAME'] avoid vite:define plugin - Vite@2.x
-export const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL']
-export const MAIN_DIST = path.join(process.env.APP_ROOT, 'dist-electron')
-export const RENDERER_DIST = path.join(process.env.APP_ROOT, 'dist')
-
-process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 'public') : RENDERER_DIST
-
-let win: BrowserWindow | null
-
-function createWindow() {
-  win = new BrowserWindow({
-    icon: path.join(process.env.VITE_PUBLIC, 'electron-vite.svg'),
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.mjs'),
-    },
-  })
-
-  // Test active push message to Renderer-process.
-  win.webContents.on('did-finish-load', () => {
-    win?.webContents.send('main-process-message', (new Date).toLocaleString())
-  })
-
-  if (VITE_DEV_SERVER_URL) {
-    win.loadURL(VITE_DEV_SERVER_URL)
-  } else {
-    // win.loadFile('dist/index.html')
-    win.loadFile(path.join(RENDERER_DIST, 'index.html'))
-  }
+if (!app.requestSingleInstanceLock()) {
+  app.exit()
 }
 
-// Quit when all windows are closed, except on macOS. There, it's common
-// for applications and their menu bar to stay active until the user quits
-// explicitly with Cmd + Q.
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit()
-    win = null
-  }
-})
+if (process.platform !== 'darwin') {
+  app.disableHardwareAcceleration()
+}
+app.enableSandbox()
 
-app.on('activate', () => {
-  // On OS X it's common to re-create a window in the app when the
-  // dock icon is clicked and there are no other windows open.
-  if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow()
-  }
-})
+let tray: AppTray
 
-app.whenReady().then(createWindow)
+app.on('ready', async () => {
+  tray = new AppTray(eventPipe)
+  const logger = new Logger(eventPipe)
+  const gameLogWatcher = new GameLogWatcher(eventPipe, logger)
+  const gameConfig = new GameConfig(eventPipe, logger)
+  const poeWindow = new GameWindow()
+  const _httpProxy = new HttpProxy(server, logger)
+  import { HttpProxy } from './proxy'
+  setTimeout(
+    async () => {
+      const overlay = new OverlayWindow(eventPipe, logger, poeWindow)
+      new OverlayVisibility(eventPipe, overlay, gameConfig)
+      const shortcuts = await Shortcuts.create(logger, overlay, poeWindow, gameConfig, eventPipe)
+      eventPipe.onEventAnyClient('CLIENT->MAIN::update-host-config', (cfg) => {
+        overlay.updateOpts(cfg.overlayKey, cfg.windowTitle)
+        shortcuts.updateActions(cfg.shortcuts, cfg.stashScroll, cfg.logKeys, cfg.restoreClipboard, cfg.language)
+        gameLogWatcher.restart(cfg.clientLog ?? '')
+        gameConfig.readConfig(cfg.gameConfig ?? '')
+        appUpdater.checkAtStartup()
+        tray.overlayKey = cfg.overlayKey
+      })
+      uIOhook.start()
+      const port = await startServer(appUpdater, logger)
+      // TODO: move up (currently crashes)
+      logger.write(`info ${os.type()} ${os.release} / v${app.getVersion()}`)
+      overlay.loadAppPage(port)
+      tray.serverPort = port
+    },
+    // fixes(linux): window is black instead of transparent
+    process.platform === 'linux' ? 1000 : 0
+  )
+})
