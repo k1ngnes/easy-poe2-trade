@@ -25,8 +25,9 @@
       "Data/*": ["./src/renderer/Data/*"],
       "Utilities/*": ["./src/renderer/Utilities/*"],
       "ipc/*": ["./ipc/*"],
-      "host-files/*": ["./src/host-files/*"],
-    }
+      "host-files/*": ["./src/electron/host-files/*"],
+      "windowing/*": ["./src/electron/windowing/*"],
+    },
   },
   "include": ["src",
     "src/electron"

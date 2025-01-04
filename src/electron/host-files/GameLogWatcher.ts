@@ -1,9 +1,9 @@
 import { promises as fs, watchFile, unwatchFile } from 'fs'
 import path from 'path'
 import { app } from 'electron'
-import { guessFileLocation } from 'host-files//utils'
-import { ServerEvents } from 'electron/server'
-import { Logger } from 'electron/RemoteLogger'
+import { guessFileLocation } from 'electron/host-files/utils.ts'
+import { ServerEvents } from 'electron/server.ts'
+import { Logger } from 'electron/RemoteLogger.ts'
 
 const POSSIBLE_PATH =
   (process.platform === 'win32') ? [
