@@ -6,15 +6,13 @@ import os from 'node:os'
 import { startServer, eventPipe, server } from 'electron/server'
 import { Logger } from 'electron/RemoteLogger'
 import { GameWindow } from 'windowing/GameWindow'
-// import { OverlayWindow } from './windowing/OverlayWindow'
+import { OverlayWindow } from 'windowing/OverlayWindow'
 import { GameConfig } from 'host-files/GameConfig'
 // import { Shortcuts } from './shortcuts/Shortcuts'
-// import { AppUpdater } from './AppUpdater'
 import { AppTray } from 'electron/AppTray'
-// import { OverlayVisibility } from './windowing/OverlayVisibility'
+ import { OverlayVisibility } from 'windowing/OverlayVisibility'
 import { GameLogWatcher } from 'host-files/GameLogWatcher'
-import { HttpProxy } from './proxy'
-
+import { HttpProxy } from 'electron/proxy'
 
 if (!app.requestSingleInstanceLock()) {
   app.exit()
@@ -33,15 +31,16 @@ app.on('ready', async () => {
   const gameLogWatcher = new GameLogWatcher(eventPipe, logger)
   const gameConfig = new GameConfig(logger)
   const poeWindow = new GameWindow()
-  const _httpProxy = new HttpProxy(server, logger)
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const _httpProxy = new HttpProxy(server, logger)
   setTimeout(
     async () => {
       const overlay = new OverlayWindow(eventPipe, logger, poeWindow)
       new OverlayVisibility(eventPipe, overlay, gameConfig)
-      const shortcuts = await Shortcuts.create(logger, overlay, poeWindow, gameConfig, eventPipe)
+      //const shortcuts = await Shortcuts.create(logger, overlay, poeWindow, gameConfig, eventPipe)
       eventPipe.onEventAnyClient('CLIENT->MAIN::update-host-config', (cfg) => {
         overlay.updateOpts(cfg.overlayKey, cfg.windowTitle)
-        shortcuts.updateActions(cfg.shortcuts, cfg.stashScroll, cfg.logKeys, cfg.restoreClipboard, cfg.language)
+        //shortcuts.updateActions(cfg.shortcuts, cfg.stashScroll, cfg.logKeys, cfg.restoreClipboard, cfg.language)
         gameLogWatcher.restart(cfg.clientLog ?? '')
         gameConfig.readConfig(cfg.gameConfig ?? '')
         tray.overlayKey = cfg.overlayKey
